@@ -1,0 +1,13 @@
+{
+  "name": "skills",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "install:all": "node scripts/install.js",
+    "install:project": "node scripts/install.js --project"
+  },
+  "bin": {
+    "skills": "scripts/install.js"
+  }
+}
