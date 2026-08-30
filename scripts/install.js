@@ -7,19 +7,19 @@ import { createHash } from 'crypto';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SKILLS_DIR = join(__dirname, '..', 'skills');
+export const SKILLS_DIR = join(__dirname, '..', 'skills');
 
-const TARGETS = {
+export const TARGETS = {
   claude:    { ext: '.md',  dir: (scope) => scope === 'project' ? ['.claude', 'commands'] : [homedir(), '.claude', 'commands'] },
   conductor: { ext: '.md',  dir: (scope) => scope === 'project' ? ['.claude', 'commands'] : [homedir(), '.claude', 'commands'] },
   cursor:    { ext: '.mdc', dir: (scope) => scope === 'project' ? ['.cursor', 'rules']    : [homedir(), '.cursor', 'rules'] },
 };
 
-function hash(content) {
+export function hash(content) {
   return createHash('sha256').update(content).digest('hex');
 }
 
-function parseFrontmatter(content) {
+export function parseFrontmatter(content) {
   const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
   if (!match) return { meta: {}, body: content };
   const meta = {};
@@ -30,20 +30,17 @@ function parseFrontmatter(content) {
   return { meta, body: match[2].trim() };
 }
 
-function transformContent(content, target) {
+export function transformContent(content, target) {
   const { meta, body } = parseFrontmatter(content);
 
   if (target === 'cursor') {
-    // Cursor uses .mdc rules: no allowed-tools, uses alwaysApply + description
     return `---\ndescription: ${meta.description || ''}\nalwaysApply: false\n---\n\n${body}`;
   }
 
-  // Claude Code and Conductor: use as-is
   return content;
 }
 
-function usageHint(target, skills) {
-  const names = skills.join(', ');
+export function usageHint(target, skills) {
   switch (target) {
     case 'claude':
     case 'conductor':
@@ -53,8 +50,8 @@ function usageHint(target, skills) {
   }
 }
 
-function installSkill(skillName, destDir, ext, target) {
-  const src = join(SKILLS_DIR, skillName, 'SKILL.md');
+export function installSkill(skillName, destDir, ext, target, skillsDir = SKILLS_DIR) {
+  const src = join(skillsDir, skillName, 'SKILL.md');
   if (!existsSync(src)) {
     console.error(`  ✗ ${skillName}: SKILL.md not found`);
     return false;
@@ -81,18 +78,19 @@ function installSkill(skillName, destDir, ext, target) {
   return true;
 }
 
-function availableSkills() {
-  return readdirSync(SKILLS_DIR).filter(name =>
-    statSync(join(SKILLS_DIR, name)).isDirectory() &&
-    existsSync(join(SKILLS_DIR, name, 'SKILL.md'))
+export function availableSkills(skillsDir = SKILLS_DIR) {
+  return readdirSync(skillsDir).filter(name =>
+    statSync(join(skillsDir, name)).isDirectory() &&
+    existsSync(join(skillsDir, name, 'SKILL.md'))
   );
 }
 
-function parseArgs(args) {
+export function parseArgs(args) {
   const targetIdx = args.indexOf('--target');
   const target = targetIdx !== -1 ? args[targetIdx + 1] : 'claude';
+  const targetVal = targetIdx !== -1 ? args[targetIdx + 1] : null;
   const scope = args.includes('--project') ? 'project' : 'user';
-  const skill = args.find(a => !a.startsWith('--') && a !== args[targetIdx + 1]);
+  const skill = args.find(a => !a.startsWith('--') && a !== targetVal);
   return { target, scope, skill };
 }
 
@@ -120,4 +118,6 @@ function main() {
   if (ok !== skills.length) process.exit(1);
 }
 
-main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
+}
