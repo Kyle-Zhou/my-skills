@@ -1,0 +1,17 @@
+{
+  "name": "skills",
+  "description": "Architecture and planning skills for Claude Code",
+  "version": "0.1.0",
+  "skills": [
+    {
+      "name": "diagram-plan",
+      "description": "Generate Mermaid diagrams from an agent plan",
+      "path": "skills/diagram-plan/SKILL.md"
+    },
+    {
+      "name": "architect",
+      "description": "Sync system architecture and data-flow diagrams with codebase; update README",
+      "path": "skills/architect/SKILL.md"
+    }
+  ]
+}
