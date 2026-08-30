@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "test": "node --test scripts/install.test.js",
     "install:all": "node scripts/install.js",
     "install:project": "node scripts/install.js --project"
   },
