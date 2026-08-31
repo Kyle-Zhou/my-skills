@@ -1,4 +1,4 @@
-const FIXED_COLS_PX = 116; // two 52px line-num columns + the 12px divider
+const FIXED_COLS_PX = 106; // two 52px line-num columns + the 2px divider gutter
 
 const state = {
   staged: [],
@@ -138,11 +138,18 @@ function applySplit(table, ratio) {
   const codeAreaPx = Math.max(tableWidth - FIXED_COLS_PX, 0);
   colOld.style.width = `${(codeAreaPx * ratio / tableWidth) * 100}%`;
   colNew.style.width = `${(codeAreaPx * (1 - ratio) / tableWidth) * 100}%`;
+
+  const divider = document.getElementById('diff-divider');
+  if (divider) {
+    const leftNumWidth = 52; // matches col.col-num width
+    divider.style.left = `${((leftNumWidth + codeAreaPx * ratio) / tableWidth) * 100}%`;
+  }
 }
 
 function startResizeDrag(e) {
   const table = document.querySelector('.diff-table');
   if (!table) return;
+  const divider = document.getElementById('diff-divider');
   const tableWidth = table.getBoundingClientRect().width;
   const codeAreaPx = Math.max(tableWidth - FIXED_COLS_PX, 0);
   const startX = e.clientX;
@@ -150,6 +157,7 @@ function startResizeDrag(e) {
 
   document.body.style.userSelect = 'none';
   document.body.style.cursor = 'col-resize';
+  if (divider) divider.classList.add('dragging');
 
   function onMove(ev) {
     state.splitRatio = clamp(startRatio + (ev.clientX - startX) / codeAreaPx, 0.15, 0.85);
@@ -160,6 +168,7 @@ function startResizeDrag(e) {
     document.removeEventListener('mouseup', onUp);
     document.body.style.userSelect = '';
     document.body.style.cursor = '';
+    if (divider) divider.classList.remove('dragging');
     localStorage.setItem('diff-viewer-split', String(state.splitRatio));
   }
   document.addEventListener('mousemove', onMove);
@@ -167,17 +176,71 @@ function startResizeDrag(e) {
   e.preventDefault();
 }
 
+// Marks the scrollbar-adjacent minimap with one block per contiguous run of added/deleted
+// lines, proportional to that run's position in the file. Runs (not individual lines) keep
+// the DOM node count down to roughly the number of hunks rather than the number of changed
+// lines, so it stays cheap on files with large added/deleted blocks.
+function renderMinimap(file) {
+  const minimap = document.getElementById('diff-minimap-marks');
+  minimap.innerHTML = '';
+  if (!file || file.binary || !file.rows.length) return;
+
+  const total = file.rows.length;
+  addRuns('del', row => row.left && row.left.type === 'del');
+  addRuns('add', row => row.right && row.right.type === 'add');
+
+  function addRuns(kind, isMatch) {
+    let runStart = -1;
+    for (let i = 0; i <= total; i++) {
+      const match = i < total && isMatch(file.rows[i]);
+      if (match && runStart === -1) runStart = i;
+      if (!match && runStart !== -1) {
+        addMark(kind, (runStart / total) * 100, ((i - runStart) / total) * 100);
+        runStart = -1;
+      }
+    }
+  }
+
+  function addMark(kind, top, height) {
+    const mark = document.createElement('div');
+    mark.className = `diff-minimap-mark ${kind}`;
+    mark.style.top = `${top}%`;
+    mark.style.height = `${height}%`;
+    minimap.appendChild(mark);
+  }
+}
+
+// Sizes/positions the minimap thumb to mirror the scroll pane's current viewport —
+// same math a native scrollbar thumb uses (visible fraction, scrolled fraction).
+function updateMinimapThumb() {
+  const scroll = document.getElementById('diff-scroll');
+  const thumb = document.getElementById('diff-minimap-thumb');
+  if (!scroll || !thumb) return;
+  const { scrollTop, scrollHeight, clientHeight } = scroll;
+  if (scrollHeight <= clientHeight) {
+    thumb.style.display = 'none';
+    return;
+  }
+  thumb.style.display = 'block';
+  thumb.style.top = `${(scrollTop / scrollHeight) * 100}%`;
+  thumb.style.height = `${(clientHeight / scrollHeight) * 100}%`;
+}
+
 function renderDiff() {
-  const panel = document.getElementById('diff-panel');
+  const scroll = document.getElementById('diff-scroll');
   const file = state.active;
 
   if (!file) {
-    panel.innerHTML = '<div class="empty">No changes to display.</div>';
+    scroll.innerHTML = '<div class="empty">No changes to display.</div>';
+    renderMinimap(null);
+    updateMinimapThumb();
     return;
   }
 
   if (file.binary) {
-    panel.innerHTML = `<div class="file-header">${escapeHtml(file.path)}</div><div class="binary-note">Binary file not shown.</div>`;
+    scroll.innerHTML = `<div class="file-header">${escapeHtml(file.path)}</div><div class="binary-note">Binary file not shown.</div>`;
+    renderMinimap(null);
+    updateMinimapThumb();
     return;
   }
 
@@ -197,17 +260,22 @@ function renderDiff() {
 
   const heading = file.origPath ? `${file.origPath} → ${file.path}` : file.path;
 
-  panel.innerHTML = `
-    <div class="file-header">${escapeHtml(heading)}</div>
-    <table class="diff-table">
-      <colgroup>
-        <col class="col-num"><col class="col-code left"><col class="col-divider"><col class="col-num"><col class="col-code right">
-      </colgroup>
-      <tbody>${rows}</tbody>
-    </table>
+  scroll.innerHTML = `
+    <div class="diff-content">
+      <div class="file-header">${escapeHtml(heading)}</div>
+      <table class="diff-table">
+        <colgroup>
+          <col class="col-num"><col class="col-code left"><col class="col-divider"><col class="col-num"><col class="col-code right">
+        </colgroup>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="diff-divider" id="diff-divider"></div>
+    </div>
   `;
 
-  applySplit(panel.querySelector('.diff-table'), state.splitRatio);
+  applySplit(scroll.querySelector('.diff-table'), state.splitRatio);
+  renderMinimap(file);
+  updateMinimapThumb();
 }
 
 async function load() {
@@ -231,9 +299,46 @@ async function load() {
   renderDiff();
 }
 
+function startThumbDrag(e) {
+  const scroll = document.getElementById('diff-scroll');
+  const thumb = document.getElementById('diff-minimap-thumb');
+  const trackHeight = document.getElementById('diff-minimap').getBoundingClientRect().height;
+  const startY = e.clientY;
+  const startScrollTop = scroll.scrollTop;
+
+  thumb.classList.add('dragging');
+
+  function onMove(ev) {
+    const deltaScroll = ((ev.clientY - startY) / trackHeight) * scroll.scrollHeight;
+    scroll.scrollTop = clamp(startScrollTop + deltaScroll, 0, scroll.scrollHeight - scroll.clientHeight);
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    thumb.classList.remove('dragging');
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+  e.preventDefault();
+  e.stopPropagation();
+}
+
 document.addEventListener('mousedown', e => {
-  if (e.target.classList.contains('divider')) startResizeDrag(e);
+  if (e.target.closest('.diff-divider')) startResizeDrag(e);
 });
+
+document.getElementById('diff-minimap-thumb').addEventListener('mousedown', startThumbDrag);
+
+document.getElementById('diff-minimap').addEventListener('click', e => {
+  if (e.target.closest('#diff-minimap-thumb')) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const ratio = clamp((e.clientY - rect.top) / rect.height, 0, 1);
+  const scroll = document.getElementById('diff-scroll');
+  scroll.scrollTop = ratio * (scroll.scrollHeight - scroll.clientHeight);
+});
+
+document.getElementById('diff-scroll').addEventListener('scroll', updateMinimapThumb);
+window.addEventListener('resize', updateMinimapThumb);
 
 initTheme();
 load();
