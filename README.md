@@ -10,6 +10,9 @@ Turns a plan into Mermaid diagrams. Pass a plan as inline text or a file path; o
 ### `/architect`
 Scans the codebase and keeps system architecture and data-flow diagrams synchronized with the code. Writes diagrams into a dedicated section at the bottom of `README.md` using `<!-- architecture-start -->` / `<!-- architecture-end -->` markers. Re-running updates them in place.
 
+### `/diff-viewer`
+Starts a local, zero-dependency web server showing uncommitted changes side-by-side — old on the left, new on the right, red/green highlights, light/dark toggle. Sidebar is a collapsible directory tree (like GitHub) split into Staged Changes and Changes sections (like an IDE's source control panel). Opens automatically in the default browser.
+
 ---
 
 ## Installation
@@ -64,9 +67,9 @@ Re-run the same install command. Files that haven't changed are skipped; changed
 
 | Agent | How to invoke |
 |---|---|
-| Claude Code | `/diagram-plan`, `/architect` |
-| Conductor | `/diagram-plan`, `/architect` |
-| Cursor | Type `@diagram-plan` or `@architect` in chat |
+| Claude Code | `/diagram-plan`, `/architect`, `/diff-viewer` |
+| Conductor | `/diagram-plan`, `/architect`, `/diff-viewer` |
+| Cursor | Type `@diagram-plan`, `@architect`, or `@diff-viewer` in chat |
 
 ---
 
@@ -101,3 +104,5 @@ Skills are plain markdown files. The installer copies them to the right location
 | `cursor` | `~/.cursor/rules/` or `.cursor/rules/` | `.mdc` with Cursor frontmatter |
 
 No servers to start. No config to edit manually. The skill content is agent-agnostic — only the delivery format changes.
+
+**Note:** `diff-viewer` bundles a `server.js` and `public/` assets alongside its `SKILL.md`. The installer above only copies `SKILL.md` into the flat `commands`/`rules` directories, so those bundled files won't be carried over by `node scripts/install.js`. For now, run `/diff-viewer` from within this repo (e.g. via the `.claude-plugin` plugin, which references `skills/diff-viewer/SKILL.md` directly), or install it manually by copying the whole `skills/diff-viewer/` folder into `.claude/skills/diff-viewer/`.

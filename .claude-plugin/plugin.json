@@ -12,6 +12,11 @@
       "name": "architect",
       "description": "Sync system architecture and data-flow diagrams with codebase; update README",
       "path": "skills/architect/SKILL.md"
+    },
+    {
+      "name": "diff-viewer",
+      "description": "Launch a local web UI to review uncommitted changes side-by-side, like an IDE diff view",
+      "path": "skills/diff-viewer/SKILL.md"
     }
   ]
 }
