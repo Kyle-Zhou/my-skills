@@ -11,6 +11,11 @@
   --del-text: #cf222e;
   --line-num: #8c959f;
   --hover: #eef1f4;
+  --tok-keyword: #0550ae;
+  --tok-string: #953800;
+  --tok-number: #6639ba;
+  --tok-function: #0b7285;
+  --tok-comment: #6e7781;
 }
 
 [data-theme="dark"] {
@@ -26,6 +31,11 @@
   --del-text: #ff453a;
   --line-num: #6e6e6e;
   --hover: #2e2e2e;
+  --tok-keyword: #79c0ff;
+  --tok-string: #ffa657;
+  --tok-number: #d2a8ff;
+  --tok-function: #56d4dd;
+  --tok-comment: #8b949e;
 }
 
 * { box-sizing: border-box; }
@@ -228,3 +238,9 @@ td.divider:hover { background: var(--text-muted); }
 td.del { background: var(--del-bg); }
 td.add { background: var(--add-bg); }
 td.blank { background: var(--bg-panel); }
+
+.tok-keyword { color: var(--tok-keyword); }
+.tok-string { color: var(--tok-string); }
+.tok-number { color: var(--tok-number); }
+.tok-function { color: var(--tok-function); }
+.tok-comment { color: var(--tok-comment); font-style: italic; }
