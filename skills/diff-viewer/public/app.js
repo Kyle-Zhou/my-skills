@@ -13,10 +13,6 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-function escapeHtml(s) {
-  return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-}
-
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem('diff-viewer-theme', theme);
@@ -185,16 +181,17 @@ function renderDiff() {
     return;
   }
 
+  const lang = detectLanguage(file.path);
   const rows = file.rows.map(row => {
     const left = row.left, right = row.right;
     const leftClass = left ? left.type : 'blank';
     const rightClass = right ? right.type : 'blank';
     return `<tr>
       <td class="line-num ${leftClass}">${left ? left.num : ''}</td>
-      <td class="code ${leftClass}">${left ? escapeHtml(left.text) : ''}</td>
+      <td class="code ${leftClass}">${left ? highlightLine(left.text, lang) : ''}</td>
       <td class="divider"></td>
       <td class="line-num ${rightClass}">${right ? right.num : ''}</td>
-      <td class="code ${rightClass}">${right ? escapeHtml(right.text) : ''}</td>
+      <td class="code ${rightClass}">${right ? highlightLine(right.text, lang) : ''}</td>
     </tr>`;
   }).join('');
 
