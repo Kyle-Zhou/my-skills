@@ -17,7 +17,7 @@ Show the user their current uncommitted changes (staged, unstaged, and new files
 ## What it shows
 
 - Left sidebar: a collapsible directory tree (like GitHub's PR file view), split into a "Staged Changes" section and a "Changes" (unstaged) section — a file with both staged and unstaged edits appears in both, each with its own diff.
-- Main panel: side-by-side diff for the selected file, removed lines highlighted red, added lines highlighted green.
+- Main panel: side-by-side diff for the selected file, removed lines highlighted red, added lines highlighted green. Drag the divider between the two sides to resize them.
 - A light/dark mode toggle floating in the top-right corner (persists across runs via localStorage).
 
 No arguments needed — it diffs the current working tree against `HEAD` in whatever directory `server.js` is run from (must be inside a git repo).

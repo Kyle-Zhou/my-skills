@@ -1,10 +1,17 @@
+const FIXED_COLS_PX = 116; // two 52px line-num columns + the 12px divider
+
 const state = {
   staged: [],
   unstaged: [],
   active: null,
   activeKey: null,
   collapsedFolders: new Set(),
+  splitRatio: clamp(parseFloat(localStorage.getItem('diff-viewer-split')) || 0.5, 0.15, 0.85),
 };
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
 
 function escapeHtml(s) {
   return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
@@ -13,7 +20,7 @@ function escapeHtml(s) {
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem('diff-viewer-theme', theme);
-  document.getElementById('theme-toggle').textContent = theme === 'dark' ? '☀️' : '🌙';
+  document.getElementById('theme-toggle').setAttribute('aria-checked', String(theme === 'dark'));
 }
 
 function initTheme() {
@@ -127,6 +134,43 @@ function renderSidebar() {
   }
 }
 
+function applySplit(table, ratio) {
+  const colOld = table.querySelector('.col-code.left');
+  const colNew = table.querySelector('.col-code.right');
+  if (!colOld || !colNew) return;
+  const tableWidth = table.getBoundingClientRect().width;
+  const codeAreaPx = Math.max(tableWidth - FIXED_COLS_PX, 0);
+  colOld.style.width = `${(codeAreaPx * ratio / tableWidth) * 100}%`;
+  colNew.style.width = `${(codeAreaPx * (1 - ratio) / tableWidth) * 100}%`;
+}
+
+function startResizeDrag(e) {
+  const table = document.querySelector('.diff-table');
+  if (!table) return;
+  const tableWidth = table.getBoundingClientRect().width;
+  const codeAreaPx = Math.max(tableWidth - FIXED_COLS_PX, 0);
+  const startX = e.clientX;
+  const startRatio = state.splitRatio;
+
+  document.body.style.userSelect = 'none';
+  document.body.style.cursor = 'col-resize';
+
+  function onMove(ev) {
+    state.splitRatio = clamp(startRatio + (ev.clientX - startX) / codeAreaPx, 0.15, 0.85);
+    applySplit(table, state.splitRatio);
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+    localStorage.setItem('diff-viewer-split', String(state.splitRatio));
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+  e.preventDefault();
+}
+
 function renderDiff() {
   const panel = document.getElementById('diff-panel');
   const file = state.active;
@@ -160,11 +204,13 @@ function renderDiff() {
     <div class="file-header">${escapeHtml(heading)}</div>
     <table class="diff-table">
       <colgroup>
-        <col class="col-num"><col><col class="col-divider"><col class="col-num"><col>
+        <col class="col-num"><col class="col-code left"><col class="col-divider"><col class="col-num"><col class="col-code right">
       </colgroup>
       <tbody>${rows}</tbody>
     </table>
   `;
+
+  applySplit(panel.querySelector('.diff-table'), state.splitRatio);
 }
 
 async function load() {
@@ -187,6 +233,10 @@ async function load() {
   renderSidebar();
   renderDiff();
 }
+
+document.addEventListener('mousedown', e => {
+  if (e.target.classList.contains('divider')) startResizeDrag(e);
+});
 
 initTheme();
 load();

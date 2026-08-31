@@ -37,25 +37,59 @@ body {
   color: var(--text);
 }
 
-.app { height: 100vh; }
+.app { display: flex; flex-direction: column; height: 100vh; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  flex-shrink: 0;
+}
 
 .theme-toggle {
-  position: fixed;
-  top: 16px;
-  right: 18px;
-  z-index: 20;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
-  border-radius: 6px;
-  padding: 4px 10px;
+  background: none;
+  border: none;
+  padding: 0;
   cursor: pointer;
-  font-size: 14px;
-  line-height: 1.4;
+  line-height: 0;
 }
-.theme-toggle:hover { background: var(--hover); }
 
-.body { display: flex; height: 100%; min-height: 0; }
+.toggle-track {
+  display: inline-flex;
+  align-items: center;
+  width: 42px;
+  height: 24px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--border);
+  transition: background 0.15s ease;
+}
+.theme-toggle:hover .toggle-track { background: var(--line-num); }
+
+.toggle-thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transform: translateX(0);
+  transition: transform 0.15s ease;
+}
+[data-theme="dark"] .toggle-thumb { transform: translateX(18px); }
+
+.toggle-thumb .icon { display: block; }
+.toggle-thumb .icon-moon { display: none; }
+[data-theme="dark"] .toggle-thumb .icon-sun { display: none; }
+[data-theme="dark"] .toggle-thumb .icon-moon { display: block; }
+
+.body { display: flex; flex: 1; min-height: 0; }
 
 .sidebar {
   width: 280px;
@@ -162,6 +196,11 @@ table.diff-table {
   font-size: 12.5px;
 }
 
+/* Extra breathing room around the first/last line — applied as padding (not margin)
+   so an add/del background on that row fills the space instead of leaving a neutral gap. */
+table.diff-table tbody tr:first-child td { padding-top: 7px; }
+table.diff-table tbody tr:last-child td { padding-bottom: 7px; }
+
 table.diff-table col.col-num { width: 52px; }
 table.diff-table col.col-divider { width: 12px; }
 
@@ -183,7 +222,8 @@ td.line-num {
   white-space: nowrap;
 }
 
-td.divider { background: var(--border); padding: 0; }
+td.divider { background: var(--border); padding: 0; cursor: col-resize; }
+td.divider:hover { background: var(--text-muted); }
 
 td.del { background: var(--del-bg); }
 td.add { background: var(--add-bg); }
