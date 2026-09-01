@@ -7,10 +7,43 @@ const state = {
   activeKey: null,
   collapsedFolders: new Set(),
   splitRatio: clamp(parseFloat(localStorage.getItem('diff-viewer-split')) || 0.5, 0.15, 0.85),
+  sidebarWidth: clamp(parseFloat(localStorage.getItem('diff-viewer-sidebar-width')) || 280, 160, 560),
 };
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function copyButtonHtml(path) {
+  return `<button class="copy-btn" data-path="${escapeHtml(path)}" title="Copy path" aria-label="Copy path">
+    <svg class="copy-icon" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="5.5" y="5.5" width="8" height="9" rx="1.5"></rect>
+      <path d="M3.5 10.5h-1a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v1"></path>
+    </svg>
+    <svg class="check-icon" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 8l3.5 3.5L13 4.5"></path>
+    </svg>
+  </button>`;
+}
+
+// Attached directly to each button (not delegated) so it fires before the click can bubble
+// to a row's own "select this file" listener — otherwise selecting re-renders the sidebar
+// mid-click and wipes the "copied" feedback before it's visible.
+function wireCopyButton(btn) {
+  if (!btn) return;
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    e.preventDefault();
+    navigator.clipboard.writeText(btn.dataset.path).then(() => {
+      btn.classList.add('copied');
+      clearTimeout(btn._copiedTimeout);
+      btn._copiedTimeout = setTimeout(() => btn.classList.remove('copied'), 1200);
+    });
+  });
+}
+
+function applySidebarWidth() {
+  document.getElementById('file-list').style.width = `${state.sidebarWidth}px`;
 }
 
 function applyTheme(theme) {
@@ -98,13 +131,14 @@ function renderTree(container, node, section, depth, keyPrefix) {
     const row = document.createElement('div');
     row.className = 'tree-row file-row' + (state.activeKey === activeKey ? ' active' : '');
     row.style.paddingLeft = `${depth * 16 + 12}px`;
-    row.innerHTML = `<span class="status-badge status-${file.status}">${file.status}</span><span class="file-name">${escapeHtml(name)}</span>`;
+    row.innerHTML = `<span class="status-badge status-${file.status}">${file.status}</span><span class="file-name">${escapeHtml(name)}</span>${copyButtonHtml(file.path)}`;
     row.addEventListener('click', () => {
       state.activeKey = activeKey;
       state.active = file;
       renderSidebar();
       renderDiff();
     });
+    wireCopyButton(row.querySelector('.copy-btn'));
     container.appendChild(row);
   }
 }
@@ -262,7 +296,10 @@ function renderDiff() {
 
   scroll.innerHTML = `
     <div class="diff-content">
-      <div class="file-header">${escapeHtml(heading)}</div>
+      <div class="file-header">
+        <span class="file-header-text">${escapeHtml(heading)}</span>
+        ${copyButtonHtml(file.path)}
+      </div>
       <table class="diff-table">
         <colgroup>
           <col class="col-num"><col class="col-code left"><col class="col-divider"><col class="col-num"><col class="col-code right">
@@ -276,6 +313,27 @@ function renderDiff() {
   applySplit(scroll.querySelector('.diff-table'), state.splitRatio);
   renderMinimap(file);
   updateMinimapThumb();
+  wireCopyButton(scroll.querySelector('.file-header .copy-btn'));
+}
+
+function renderRepoInfo(meta) {
+  const el = document.getElementById('repo-info');
+  if (!meta || !meta.root) {
+    el.innerHTML = '';
+    return;
+  }
+  const name = meta.root.split('/').filter(Boolean).pop() || meta.root;
+  const branch = meta.branch
+    ? `<span class="repo-branch">
+        <svg class="branch-icon" viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="4" cy="4" r="2"></circle>
+          <circle cx="4" cy="12" r="2"></circle>
+          <circle cx="12" cy="6" r="2"></circle>
+          <path d="M4 6v4M4 6a4 4 0 0 0 4 4h2"></path>
+        </svg>${escapeHtml(meta.branch)}
+      </span>`
+    : '';
+  el.innerHTML = `<span class="repo-path" title="${escapeHtml(meta.root)}">${escapeHtml(name)}</span>${branch}`;
 }
 
 async function load() {
@@ -283,6 +341,7 @@ async function load() {
   const data = await res.json();
   state.staged = data.staged || [];
   state.unstaged = data.unstaged || [];
+  renderRepoInfo(data.meta);
 
   const first = state.unstaged[0]
     ? { file: state.unstaged[0], section: 'unstaged' }
@@ -323,8 +382,35 @@ function startThumbDrag(e) {
   e.stopPropagation();
 }
 
+function startSidebarResizeDrag(e) {
+  const resizer = document.getElementById('sidebar-resizer');
+  const startX = e.clientX;
+  const startWidth = state.sidebarWidth;
+
+  document.body.style.userSelect = 'none';
+  document.body.style.cursor = 'col-resize';
+  resizer.classList.add('dragging');
+
+  function onMove(ev) {
+    state.sidebarWidth = clamp(startWidth + (ev.clientX - startX), 160, 560);
+    applySidebarWidth();
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+    resizer.classList.remove('dragging');
+    localStorage.setItem('diff-viewer-sidebar-width', String(state.sidebarWidth));
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+  e.preventDefault();
+}
+
 document.addEventListener('mousedown', e => {
   if (e.target.closest('.diff-divider')) startResizeDrag(e);
+  if (e.target.closest('#sidebar-resizer')) startSidebarResizeDrag(e);
 });
 
 document.getElementById('diff-minimap-thumb').addEventListener('mousedown', startThumbDrag);
@@ -340,5 +426,6 @@ document.getElementById('diff-minimap').addEventListener('click', e => {
 document.getElementById('diff-scroll').addEventListener('scroll', updateMinimapThumb);
 window.addEventListener('resize', updateMinimapThumb);
 
+applySidebarWidth();
 initTheme();
 load();

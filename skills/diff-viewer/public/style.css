@@ -52,12 +52,42 @@ body {
 .topbar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: 16px;
   padding: 8px 18px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-panel);
   flex-shrink: 0;
 }
+
+.repo-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.repo-info .repo-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repo-info .repo-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--hover);
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.repo-info .branch-icon { flex-shrink: 0; }
 
 .theme-toggle {
   background: none;
@@ -105,10 +135,27 @@ body {
   width: 280px;
   flex-shrink: 0;
   overflow-y: auto;
-  border-right: 1px solid var(--border);
   background: var(--bg-sidebar);
   padding: 16px 0;
 }
+
+.sidebar-resizer {
+  position: relative;
+  width: 5px;
+  flex-shrink: 0;
+  cursor: col-resize;
+}
+.sidebar-resizer::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+.sidebar-resizer:hover::after,
+.sidebar-resizer.dragging::after { background: var(--text-muted); }
 
 .section-header {
   padding: 16px 18px 8px;
@@ -153,7 +200,32 @@ body {
 .folder-row .chevron.collapsed::before { transform: rotate(-45deg); }
 .folder-row .folder-name { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; }
 
-.file-row .file-name { overflow: hidden; text-overflow: ellipsis; }
+.file-row .file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.copy-btn:hover { background: var(--border); color: var(--text); }
+.copy-btn .check-icon { display: none; color: var(--add-text); }
+.copy-btn.copied .copy-icon { display: none; }
+.copy-btn.copied .check-icon { display: inline-flex; }
+
+/* Hidden until the row is hovered/focused (or just used), so the tree doesn't get noisy. */
+.file-row .copy-btn { opacity: 0; }
+.file-row:hover .copy-btn,
+.file-row .copy-btn:focus-visible,
+.file-row .copy-btn.copied { opacity: 1; }
 
 .empty-sidebar {
   padding: 32px 18px;
@@ -232,15 +304,22 @@ body {
 .file-header {
   position: sticky;
   top: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
-  padding: 14px 64px 14px 24px;
+  padding: 14px 24px;
   font-size: 13px;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  z-index: 1;
+}
+
+.file-header-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  z-index: 1;
 }
 
 .binary-note { padding: 32px 24px; color: var(--text-muted); }

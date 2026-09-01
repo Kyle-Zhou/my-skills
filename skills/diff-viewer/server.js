@@ -62,6 +62,17 @@ function getChangedFiles(repoRoot) {
   return entries;
 }
 
+function getBranch(repoRoot) {
+  try {
+    const branch = execFileSync('git', ['branch', '--show-current'], { cwd: repoRoot }).toString().trim();
+    if (branch) return branch;
+    // Detached HEAD has no branch name — fall back to the short commit hash.
+    return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: repoRoot }).toString().trim();
+  } catch {
+    return '';
+  }
+}
+
 function statusLabel(ch) {
   if (ch === 'A' || ch === 'R' || ch === 'D' || ch === 'C' || ch === 'U') return ch;
   return 'M';
@@ -196,7 +207,7 @@ function buildDiffPayload(repoRoot) {
     }
   }
 
-  return { staged, unstaged };
+  return { staged, unstaged, meta: { root: repoRoot, branch: getBranch(repoRoot) } };
 }
 
 function serveStatic(req, res) {
