@@ -38,6 +38,34 @@
       </main>
     </div>
   </div>
+  <div class="selection-popup" id="selection-popup" hidden>
+    <div class="selection-popup-row">
+      <label for="selection-popup-text">Text</label>
+      <textarea id="selection-popup-text" rows="6"></textarea>
+      <button class="copy-btn" id="selection-copy-text" title="Copy text" aria-label="Copy text">
+        <svg class="copy-icon" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="5.5" y="5.5" width="8" height="9" rx="1.5"></rect>
+          <path d="M3.5 10.5h-1a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v1"></path>
+        </svg>
+        <svg class="check-icon" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 8l3.5 3.5L13 4.5"></path>
+        </svg>
+      </button>
+    </div>
+    <div class="selection-popup-row">
+      <label for="selection-popup-ref">Ref</label>
+      <input type="text" id="selection-popup-ref" />
+      <button class="copy-btn" id="selection-copy-ref" title="Copy file name + line numbers" aria-label="Copy file name + line numbers">
+        <svg class="copy-icon" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="5.5" y="5.5" width="8" height="9" rx="1.5"></rect>
+          <path d="M3.5 10.5h-1a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v1"></path>
+        </svg>
+        <svg class="check-icon" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 8l3.5 3.5L13 4.5"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
   <script src="highlight.js"></script>
   <script src="app.js"></script>
 </body>

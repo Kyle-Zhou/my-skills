@@ -14,6 +14,27 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+// Shared by every drag-to-resize/drag-to-select interaction below: runs onMove for the
+// duration of the drag and onUp exactly once when it ends. "Ends" includes not just a normal
+// mouseup, but also the button being released outside the document (no mouseup delivered here)
+// and the window losing focus mid-drag — both leave a bare mousemove/mouseup pair stuck
+// listening forever otherwise, so a later unrelated click reads it as part of a new drag.
+function trackDrag(onMove, onUp) {
+  function finish(ev) {
+    document.removeEventListener('mousemove', handleMove);
+    document.removeEventListener('mouseup', finish);
+    window.removeEventListener('blur', finish);
+    onUp(ev);
+  }
+  function handleMove(ev) {
+    if (ev.buttons === 0) { finish(ev); return; }
+    onMove(ev);
+  }
+  document.addEventListener('mousemove', handleMove);
+  document.addEventListener('mouseup', finish);
+  window.addEventListener('blur', finish);
+}
+
 function copyButtonHtml(path) {
   return `<button class="copy-btn" data-path="${escapeHtml(path)}" title="Copy path" aria-label="Copy path">
     <svg class="copy-icon" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -198,15 +219,12 @@ function startResizeDrag(e) {
     applySplit(table, state.splitRatio);
   }
   function onUp() {
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup', onUp);
     document.body.style.userSelect = '';
     document.body.style.cursor = '';
     if (divider) divider.classList.remove('dragging');
     localStorage.setItem('diff-viewer-split', String(state.splitRatio));
   }
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup', onUp);
+  trackDrag(onMove, onUp);
   e.preventDefault();
 }
 
@@ -263,6 +281,7 @@ function updateMinimapThumb() {
 function renderDiff() {
   const scroll = document.getElementById('diff-scroll');
   const file = state.active;
+  hideSelectionPopup();
 
   if (!file) {
     scroll.innerHTML = '<div class="empty">No changes to display.</div>';
@@ -279,16 +298,16 @@ function renderDiff() {
   }
 
   const lang = detectLanguage(file.path);
-  const rows = file.rows.map(row => {
+  const rows = file.rows.map((row, i) => {
     const left = row.left, right = row.right;
     const leftClass = left ? left.type : 'blank';
     const rightClass = right ? right.type : 'blank';
-    return `<tr>
-      <td class="line-num ${leftClass}">${left ? left.num : ''}</td>
-      <td class="code ${leftClass}">${left ? highlightLine(left.text, lang) : ''}</td>
+    return `<tr data-row="${i}">
+      <td class="line-num ${leftClass}" data-side="left">${left ? left.num : ''}</td>
+      <td class="code ${leftClass}" data-side="left">${left ? highlightLine(left.text, lang) : ''}</td>
       <td class="divider"></td>
-      <td class="line-num ${rightClass}">${right ? right.num : ''}</td>
-      <td class="code ${rightClass}">${right ? highlightLine(right.text, lang) : ''}</td>
+      <td class="line-num ${rightClass}" data-side="right">${right ? right.num : ''}</td>
+      <td class="code ${rightClass}" data-side="right">${right ? highlightLine(right.text, lang) : ''}</td>
     </tr>`;
   }).join('');
 
@@ -314,6 +333,166 @@ function renderDiff() {
   renderMinimap(file);
   updateMinimapThumb();
   wireCopyButton(scroll.querySelector('.file-header .copy-btn'));
+}
+
+function closestRow(node) {
+  const el = node.nodeType === 1 ? node : node.parentElement;
+  return el ? el.closest('tr[data-row]') : null;
+}
+
+// A drag that crosses multiple table rows can't be tracked via the browser's native Selection:
+// once a selection spans more than one <tr>, browsers switch to a special table-selection mode
+// that selects whole intervening rows (both columns) regardless of which column the drag started
+// in — Range/Selection has no notion of "stay in this visual column," and CSS user-select tricks
+// on the other column don't override that special-cased table behavior either. So instead of
+// reading window.getSelection() at all, this tracks the drag itself: which row/side the mouse is
+// over (via elementFromPoint) is sampled on every mousemove, confined to the side the drag started
+// on, and rendered as our own .row-highlight — a real per-column, multi-row highlight the browser
+// can't produce on its own.
+function cellAtPoint(x, y) {
+  const el = document.elementFromPoint(x, y);
+  return el ? el.closest('[data-side]') : null;
+}
+
+let highlightRange = null; // { side, start, end } — lets highlightRows diff against this instead of redrawing the whole range every call
+
+function clearRowHighlight() {
+  document.querySelectorAll('.row-highlight').forEach(el => el.classList.remove('row-highlight'));
+  highlightRange = null;
+}
+
+function setRowSideHighlight(rows, side, i, on) {
+  const row = rows[i];
+  if (!row) return;
+  row.querySelectorAll(`[data-side="${side}"]`).forEach(cell => cell.classList.toggle('row-highlight', on));
+}
+
+// Diffs against the previously-highlighted range (set on every mousemove during a drag) so
+// only rows entering/leaving the selection get their classList touched, instead of clearing
+// and rebuilding the whole range from scratch on every event — O(range delta) instead of
+// O(range size) per mousemove, which matters once a drag spans hundreds of rows.
+function highlightRows(rows, side, rowStart, rowEnd) {
+  const prev = highlightRange;
+  if (prev && prev.side === side && prev.start === rowStart && prev.end === rowEnd) return;
+
+  if (prev && prev.side === side) {
+    for (let i = prev.start; i < rowStart; i++) setRowSideHighlight(rows, side, i, false);
+    for (let i = rowEnd + 1; i <= prev.end; i++) setRowSideHighlight(rows, side, i, false);
+    for (let i = rowStart; i < prev.start; i++) setRowSideHighlight(rows, side, i, true);
+    for (let i = prev.end + 1; i <= rowEnd; i++) setRowSideHighlight(rows, side, i, true);
+  } else {
+    clearRowHighlight();
+    for (let i = rowStart; i <= rowEnd; i++) setRowSideHighlight(rows, side, i, true);
+  }
+  highlightRange = { side, start: rowStart, end: rowEnd };
+}
+
+function startRowSelectDrag(e, startCell) {
+  const table = startCell.closest('.diff-table');
+  const startRowEl = closestRow(startCell);
+  if (!table || !startRowEl) return;
+
+  const side = startCell.dataset.side;
+  const rows = Array.from(table.querySelectorAll('tr[data-row]'));
+  const startIndex = +startRowEl.dataset.row;
+  const startX = e.clientX, startY = e.clientY;
+  let currentIndex = startIndex;
+  let engaged = false; // crossed the drag threshold at least once
+  let hasTarget = false; // actually landed on a same-side row at least once since engaging
+
+  // Requires a few pixels of movement before engaging, so a plain click (no drag) doesn't
+  // spawn a one-line popup — it should behave like clicking anywhere else in the pane.
+  function onMove(ev) {
+    if (!engaged) {
+      if (Math.abs(ev.clientX - startX) < 4 && Math.abs(ev.clientY - startY) < 4) return;
+      engaged = true;
+      table.classList.add('dragging-select');
+    }
+    const cell = cellAtPoint(ev.clientX, ev.clientY);
+    if (!cell || cell.dataset.side !== side) return;
+    const row = closestRow(cell);
+    if (!row) return;
+    currentIndex = +row.dataset.row;
+    hasTarget = true;
+    highlightRows(rows, side, Math.min(startIndex, currentIndex), Math.max(startIndex, currentIndex));
+  }
+
+  function onUp() {
+    table.classList.remove('dragging-select');
+    if (!hasTarget) {
+      hideSelectionPopup();
+      return;
+    }
+
+    const rowStart = Math.min(startIndex, currentIndex);
+    const rowEnd = Math.max(startIndex, currentIndex);
+    const data = buildSelectionData({ rowStart, rowEnd, side });
+    if (!data) {
+      hideSelectionPopup();
+      return;
+    }
+    const anchorCell = rows[currentIndex].querySelector(`.code[data-side="${side}"]`);
+    showSelectionPopup(anchorCell.getBoundingClientRect(), data);
+  }
+
+  trackDrag(onMove, onUp);
+}
+
+function buildSelectionData(info) {
+  const file = state.active;
+  if (!file) return null;
+
+  const lines = [];
+  let firstNum = null, lastNum = null;
+  for (let i = info.rowStart; i <= info.rowEnd; i++) {
+    const entry = file.rows[i] && file.rows[i][info.side];
+    if (!entry) continue;
+    lines.push(entry.text);
+    if (firstNum === null) firstNum = entry.num;
+    lastNum = entry.num;
+  }
+  if (!lines.length) return null;
+
+  const lineRange = firstNum === lastNum ? `${firstNum}` : `${firstNum}-${lastNum}`;
+  return { text: lines.join('\n'), reference: `${file.path}:${lineRange}` };
+}
+
+function showSelectionPopup(rect, data) {
+  const popup = document.getElementById('selection-popup');
+  document.getElementById('selection-popup-text').value = data.text;
+  document.getElementById('selection-popup-ref').value = data.reference;
+
+  popup.hidden = false;
+  popup.style.top = '-9999px';
+  popup.style.left = '-9999px';
+
+  const popupRect = popup.getBoundingClientRect();
+  let top = rect.bottom + 8;
+  let left = rect.left;
+  if (top + popupRect.height > window.innerHeight - 8) top = rect.top - popupRect.height - 8;
+  if (left + popupRect.width > window.innerWidth - 8) left = window.innerWidth - popupRect.width - 8;
+  popup.style.top = `${Math.max(8, top)}px`;
+  popup.style.left = `${Math.max(8, left)}px`;
+}
+
+let popupHideTimeout = null;
+
+function hideSelectionPopup() {
+  clearTimeout(popupHideTimeout);
+  popupHideTimeout = null;
+  const popup = document.getElementById('selection-popup');
+  popup.hidden = true;
+  popup.querySelectorAll('.copy-btn.copied').forEach(btn => btn.classList.remove('copied'));
+  clearRowHighlight();
+}
+
+function copyPopupField(fieldId, btn) {
+  const field = document.getElementById(fieldId);
+  navigator.clipboard.writeText(field.value).then(() => {
+    btn.classList.add('copied');
+    clearTimeout(popupHideTimeout);
+    popupHideTimeout = setTimeout(hideSelectionPopup, 500);
+  });
 }
 
 function renderRepoInfo(meta) {
@@ -372,12 +551,9 @@ function startThumbDrag(e) {
     scroll.scrollTop = clamp(startScrollTop + deltaScroll, 0, scroll.scrollHeight - scroll.clientHeight);
   }
   function onUp() {
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup', onUp);
     thumb.classList.remove('dragging');
   }
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup', onUp);
+  trackDrag(onMove, onUp);
   e.preventDefault();
   e.stopPropagation();
 }
@@ -396,21 +572,26 @@ function startSidebarResizeDrag(e) {
     applySidebarWidth();
   }
   function onUp() {
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup', onUp);
     document.body.style.userSelect = '';
     document.body.style.cursor = '';
     resizer.classList.remove('dragging');
     localStorage.setItem('diff-viewer-sidebar-width', String(state.sidebarWidth));
   }
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup', onUp);
+  trackDrag(onMove, onUp);
   e.preventDefault();
 }
 
 document.addEventListener('mousedown', e => {
   if (e.target.closest('.diff-divider')) startResizeDrag(e);
   if (e.target.closest('#sidebar-resizer')) startSidebarResizeDrag(e);
+
+  // Closes on the initiating mousedown of any outside click, rather than waiting for the
+  // resulting mouseup — some outside targets (buttons, drag handles) call preventDefault() on
+  // mousedown, which can otherwise leave the popup stuck open.
+  if (!e.target.closest('#selection-popup')) hideSelectionPopup();
+
+  const startCell = e.target.closest('[data-side]');
+  if (startCell) startRowSelectDrag(e, startCell);
 });
 
 document.getElementById('diff-minimap-thumb').addEventListener('mousedown', startThumbDrag);
@@ -425,6 +606,14 @@ document.getElementById('diff-minimap').addEventListener('click', e => {
 
 document.getElementById('diff-scroll').addEventListener('scroll', updateMinimapThumb);
 window.addEventListener('resize', updateMinimapThumb);
+
+document.getElementById('diff-scroll').addEventListener('scroll', hideSelectionPopup);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') hideSelectionPopup();
+});
+
+document.getElementById('selection-copy-text').addEventListener('click', e => copyPopupField('selection-popup-text', e.currentTarget));
+document.getElementById('selection-copy-ref').addEventListener('click', e => copyPopupField('selection-popup-ref', e.currentTarget));
 
 applySidebarWidth();
 initTheme();
