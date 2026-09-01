@@ -13,6 +13,9 @@ Scans the codebase and keeps system architecture and data-flow diagrams synchron
 ### `/diff-viewer`
 Starts a local, zero-dependency web server showing uncommitted changes side-by-side — old on the left, new on the right, red/green highlights, light/dark toggle. Sidebar is a collapsible directory tree (like GitHub) split into Staged Changes and Changes sections (like an IDE's source control panel). Opens automatically in the default browser.
 
+### `/e2e`
+Takes requirements through the full delivery cycle: writes a design doc, sends it to parallel subagents for review, triages their feedback, writes a finalized plan (invoking `/diagram-plan` for diagrams), implements it, adds a conservative set of E2E/integration tests around the happy path and key failure points, then runs a final review (`/code-review` if available, otherwise a simple review subagent). For non-trivial features, not quick fixes.
+
 ---
 
 ## Installation
@@ -67,9 +70,9 @@ Re-run the same install command. Files that haven't changed are skipped; changed
 
 | Agent | How to invoke |
 |---|---|
-| Claude Code | `/diagram-plan`, `/architect`, `/diff-viewer` |
-| Conductor | `/diagram-plan`, `/architect`, `/diff-viewer` |
-| Cursor | Type `@diagram-plan`, `@architect`, or `@diff-viewer` in chat |
+| Claude Code | `/diagram-plan`, `/architect`, `/diff-viewer`, `/e2e` |
+| Conductor | `/diagram-plan`, `/architect`, `/diff-viewer`, `/e2e` |
+| Cursor | Type `@diagram-plan`, `@architect`, `@diff-viewer`, or `@e2e` in chat |
 
 ---
 

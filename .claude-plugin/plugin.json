@@ -17,6 +17,11 @@
       "name": "diff-viewer",
       "description": "Launch a local web UI to review uncommitted changes side-by-side, like an IDE diff view",
       "path": "skills/diff-viewer/SKILL.md"
+    },
+    {
+      "name": "e2e",
+      "description": "End-to-end feature delivery — design doc, subagent review, finalized plan, implementation, tests, and final review",
+      "path": "skills/e2e/SKILL.md"
     }
   ]
 }
