@@ -41,7 +41,7 @@ Solves for reviewing your own diffs somewhere roomier than a terminal. Opens aut
   <img alt="Diff viewer showing a side-by-side code diff with a collapsible file tree sidebar" src="skills/diff-viewer/media/screenshot.png">
 </picture>
 
-*Side-by-side diff with a collapsible file-tree sidebar, split into Staged and Changes sections.*
+*Screenshot: Browser view of side-by-side diff with a collapsible file-tree sidebar, split into Staged and Changes sections.*
 
 ### [`/e2e`](skills/e2e/SKILL.md)
 
