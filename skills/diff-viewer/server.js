@@ -1,16 +1,18 @@
 #!/usr/bin/env node
 
 import http from 'http';
-import { readFileSync, existsSync, statSync } from 'fs';
+import { readFileSync, existsSync, statSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
 import { join, extname, dirname } from 'path';
 import { execFileSync, spawn } from 'child_process';
-import { platform } from 'os';
+import { platform, tmpdir } from 'os';
 import { fileURLToPath } from 'url';
+import { createHash } from 'crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, 'public');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
 const MAX_DIFF_LINES = 4000;
+const LOCK_DIR = join(tmpdir(), 'claude-diff-viewer-locks');
 
 function isBinary(buf) {
   const len = Math.min(buf.length, 8000);
@@ -230,6 +232,49 @@ function openBrowser(url) {
   } catch {}
 }
 
+// One server per repo: reusing this lock file keeps re-launches from stacking up
+// orphaned background processes (and browser tabs) every time the skill runs.
+function lockFile(repoRoot) {
+  mkdirSync(LOCK_DIR, { recursive: true });
+  const key = createHash('sha256').update(repoRoot).digest('hex').slice(0, 16);
+  return join(LOCK_DIR, `${key}.pid`);
+}
+
+function isAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function stopPreviousInstance(lockPath) {
+  if (!existsSync(lockPath)) return;
+  const pid = Number(readFileSync(lockPath, 'utf8').trim());
+  if (pid && pid !== process.pid && isAlive(pid)) {
+    try {
+      process.kill(pid, 'SIGTERM');
+      console.log(`Stopped previous diff-viewer instance for this repo (pid ${pid}).`);
+    } catch {}
+  }
+}
+
+function claimLock(lockPath) {
+  writeFileSync(lockPath, String(process.pid), 'utf8');
+  const release = () => {
+    try {
+      if (existsSync(lockPath) && Number(readFileSync(lockPath, 'utf8').trim()) === process.pid) {
+        unlinkSync(lockPath);
+      }
+    } catch {}
+  };
+  process.on('exit', release);
+  for (const sig of ['SIGINT', 'SIGTERM']) {
+    process.on(sig, () => { release(); process.exit(0); });
+  }
+}
+
 function main() {
   let repoRoot;
   try {
@@ -238,6 +283,9 @@ function main() {
     console.error('Not inside a git repository.');
     process.exit(1);
   }
+
+  const lockPath = lockFile(repoRoot);
+  stopPreviousInstance(lockPath);
 
   const server = http.createServer((req, res) => {
     if (req.url === '/api/diff') {
@@ -254,11 +302,12 @@ function main() {
     serveStatic(req, res);
   });
 
-  server.listen(process.env.PORT ? Number(process.env.PORT) : 0, () => {
+  server.listen(process.env.PORT ? Number(process.env.PORT) : 0, '127.0.0.1', () => {
     const { port } = server.address();
     const url = `http://localhost:${port}`;
     console.log(`Diff viewer running at ${url}`);
     console.log('Press Ctrl+C to stop.');
+    claimLock(lockPath);
     openBrowser(url);
   });
 }
