@@ -11,6 +11,7 @@
   --del-text: #cf222e;
   --line-num: #8c959f;
   --hover: #eef1f4;
+  --select-bg: rgba(84, 174, 255, 0.3);
   --tok-keyword: #0550ae;
   --tok-string: #953800;
   --tok-number: #6639ba;
@@ -31,6 +32,7 @@
   --del-text: #ff453a;
   --line-num: #6e6e6e;
   --hover: #2e2e2e;
+  --select-bg: rgba(56, 139, 253, 0.35);
   --tok-keyword: #79c0ff;
   --tok-string: #ffa657;
   --tok-number: #d2a8ff;
@@ -387,6 +389,18 @@ td.line-num {
    that (unlike this per-row cell) can extend past the table to the bottom of the panel. */
 td.divider { padding: 0; }
 
+/* Native text selection can't stay confined to one column across multiple table rows (a real
+   multi-row drag makes browsers switch to a special table-selection mode that grabs whole rows,
+   both columns, regardless of where the drag started) — so app.js's custom per-column
+   drag-and-highlight (startRowSelectDrag / .row-highlight below) takes over instead, once a
+   drag actually engages (the .dragging-select class, toggled in startRowSelectDrag). Scoped to
+   only while dragging — not a blanket rule — so plain clicks, double-click word-select, and
+   right-click "Copy" still work natively the rest of the time. */
+.diff-table.dragging-select [data-side] { user-select: none; }
+.diff-table .code[data-side] { cursor: text; }
+
+.diff-table [data-side].row-highlight { background: var(--select-bg); }
+
 td.del { background: var(--del-bg); }
 td.add { background: var(--add-bg); }
 td.blank { background: var(--bg-panel); }
@@ -396,3 +410,50 @@ td.blank { background: var(--bg-panel); }
 .tok-number { color: var(--tok-number); }
 .tok-function { color: var(--tok-function); }
 .tok-comment { color: var(--tok-comment); font-style: italic; }
+
+/* Floating card shown when text is selected inside the diff — lets you copy either the
+   raw selected text or a "file:line-range" reference, editing either before copying. */
+.selection-popup {
+  position: fixed;
+  z-index: 50;
+  width: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  padding: 14px;
+}
+.selection-popup[hidden] { display: none; }
+
+.selection-popup-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.selection-popup-row label {
+  width: 32px;
+  flex-shrink: 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.selection-popup textarea,
+.selection-popup input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 13px;
+  resize: none;
+}
+
